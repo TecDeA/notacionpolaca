@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f3efe6">
+<title>Notación polaca</title>
+<meta name="description" content="Convierte entre notación infija, polaca y polaca inversa.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Notación">
+<style>
+:root{
+  --bg:#f3efe6; --card:#fffdf8; --ink:#1d2433; --mute:#6b7280; --line:#d9d2c0;
+  --acc:#1f4e8c; --acc-ink:#fff; --err:#a3262a; --chip:#e8e1cf;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#141a26;--card:#1c2434;--ink:#e8ebf2;--mute:#97a0b3;--line:#2e3950;--acc:#7fb0f0;--acc-ink:#0d1524;--err:#ff8a8d;--chip:#26314a}
+}
+:root[data-theme="dark"]{--bg:#141a26;--card:#1c2434;--ink:#e8ebf2;--mute:#97a0b3;--line:#2e3950;--acc:#7fb0f0;--acc-ink:#0d1524;--err:#ff8a8d;--chip:#26314a}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
+main{max-width:560px;margin:0 auto;padding:20px 16px 40px}
+h1{font:700 1.7rem/1.15 Georgia,"Times New Roman",serif;margin:8px 0 4px;letter-spacing:-.01em}
+.sub{color:var(--mute);margin:0 0 18px;font-size:.95rem}
+label{display:block;font-weight:600;font-size:.9rem;margin:0 0 6px}
+.seg{display:flex;gap:6px;margin-bottom:16px}
+.seg button{flex:1;padding:10px 6px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;font:inherit;font-size:.9rem;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:600}
+textarea{width:100%;min-height:84px;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:1.15rem/1.4 ui-monospace,Menlo,Consolas,monospace}
+button:focus-visible,textarea:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 18px}
+.chips button{border:0;background:var(--chip);color:var(--ink);padding:6px 10px;border-radius:999px;font:.85rem ui-monospace,Menlo,Consolas,monospace;cursor:pointer}
+.err{color:var(--err);font-weight:600;margin:0 0 14px;min-height:1.5em}
+.res{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.res h2{font-size:.95rem;margin:0 0 2px}
+.res small{color:var(--mute)}
+.out{font:1.2rem/1.4 ui-monospace,Menlo,Consolas,monospace;word-break:break-word;margin:8px 0 10px;min-height:1.6em}
+.acts{display:flex;gap:8px}
+.acts button{padding:8px 12px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;font:inherit;font-size:.85rem;cursor:pointer}
+.help{color:var(--mute);font-size:.85rem;margin-top:22px}
+.help code{background:var(--chip);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Notación polaca</h1>
+  <p class="sub">Convierte entre infija, polaca (prefija) y polaca inversa (posfija).</p>
+
+  <label id="l-src">La expresión está en notación</label>
+  <div class="seg" id="seg" role="group" aria-labelledby="l-src">
+    <button data-f="infix" aria-pressed="true">Infija</button>
+    <button data-f="prefix" aria-pressed="false">Polaca</button>
+    <button data-f="postfix" aria-pressed="false">Inversa</button>
+  </div>
+
+  <label for="inp">Expresión</label>
+  <textarea id="inp" spellcheck="false" autocomplete="off" autocapitalize="off" inputmode="text">(3 + 4) * 5 - 6 / 2</textarea>
+  <div class="chips" id="chips" aria-label="Ejemplos"></div>
+
+  <p class="err" id="err" role="alert"></p>
+  <div id="results"></div>
+
+  <p class="help">Operadores: <code>+ − * / % ^</code> y paréntesis. En polaca e inversa, separa los elementos con espacios y usa <code>~</code> para el signo negativo unario (ej. <code>~ 5</code>).</p>
+</main>
+
+<script>
+const PREC={'+':1,'-':1,'*':2,'/':2,'%':2,'^':3}, RIGHT={'^':true};
+const NAMES={infix:'Infija',prefix:'Polaca (prefija)',postfix:'Polaca inversa (posfija)'};
+const EX={
+  infix:['(3 + 4) * 5 - 6 / 2','a ^ b ^ c','-(x + y) * 2','(a + b) * (c - d) / e'],
+  prefix:['- * + 3 4 5 / 6 2','^ a ^ b c','* ~ + x y 2'],
+  postfix:['3 4 + 5 * 6 2 / -','a b c ^ ^','x y + ~ 2 *']
+};
+const isOperand=t=>/^[\d.A-Za-z_]/.test(t);
+
+function tokenize(s){
+  s=s.replace(/×/g,'*').replace(/÷/g,'/').replace(/[−–]/g,'-');
+  const re=/\s*(\d+\.?\d*|\.\d+|[A-Za-z_]\w*|[-+*\/^%~()])/y, out=[];
+  s=s.trim(); if(!s) throw Error('Escribe una expresión.');
+  let m; re.lastIndex=0;
+  while(re.lastIndex<s.length){
+    m=re.exec(s);
+    if(!m) throw Error('Carácter no válido cerca de «'+s.slice(re.lastIndex).trim()[0]+'».');
+    out.push(m[1]);
+  }
+  return out;
+}
+
+function parseInfix(tk){
+  let i=0; const peek=()=>tk[i];
+  function expr(min){
+    let l=unary(), op;
+    while((op=peek()) && PREC[op] && PREC[op]>=min){
+      i++; const r=expr(RIGHT[op]?PREC[op]:PREC[op]+1);
+      l={op,l,r};
+    }
+    return l;
+  }
+  function unary(){
+    const t=tk[i++];
+    if(t===undefined) throw Error('La expresión está incompleta.');
+    if(t==='-') return {u:1,c:expr(3)};
+    if(t==='+') return unary();
+    if(t==='('){
+      const e=expr(1);
+      if(tk[i++]!==')') throw Error('Falta cerrar un paréntesis.');
+      return e;
+    }
+    if(t===')') throw Error('Paréntesis de cierre sin apertura.');
+    if(isOperand(t)) return {v:t};
+    throw Error('Operador «'+t+'» inesperado.');
+  }
+  const e=expr(1);
+  if(i<tk.length) throw Error(tk[i]===')'?'Paréntesis de cierre sin apertura.':'Sobra «'+tk[i]+'».');
+  return e;
+}
+
+function parsePrefix(tk){
+  let i=0;
+  function p(){
+    const t=tk[i++];
+    if(t===undefined) throw Error('Faltan operandos.');
+    if(t==='~') return {u:1,c:p()};
+    if(PREC[t]){const l=p(); return {op:t,l,r:p()}}
+    if(isOperand(t)) return {v:t};
+    throw Error('Símbolo «'+t+'» no válido aquí.');
+  }
+  const e=p();
+  if(i<tk.length) throw Error('Sobran elementos: «'+tk.slice(i).join(' ')+'».');
+  return e;
+}
+
+function parsePostfix(tk){
+  const st=[];
+  for(const t of tk){
+    if(t==='~'){ if(!st.length) throw Error('Falta un operando para «~».'); st.push({u:1,c:st.pop()}); }
+    else if(PREC[t]){ if(st.length<2) throw Error('Faltan operandos para «'+t+'».'); const r=st.pop(),l=st.pop(); st.push({op:t,l,r}); }
+    else if(isOperand(t)) st.push({v:t});
+    else throw Error('Símbolo «'+t+'» no válido aquí.');
+  }
+  if(st.length!==1) throw Error(st.length?'Sobran operandos.':'La expresión está vacía.');
+  return st[0];
+}
+
+const toPre=n=>n.v!==undefined?[n.v]:n.u?['~',...toPre(n.c)]:[n.op,...toPre(n.l),...toPre(n.r)];
+const toPost=n=>n.v!==undefined?[n.v]:n.u?[...toPost(n.c),'~']:[...toPost(n.l),...toPost(n.r),n.op];
+function prec(n){return n.v!==undefined?9:n.u?2.5:PREC[n.op]}
+function toIn(n){
+  if(n.v!==undefined) return n.v;
+  if(n.u){const c=toIn(n.c); return '-'+(prec(n.c)<3?'('+c+')':c)}
+  const p=PREC[n.op], pl=prec(n.l), pr=prec(n.r);
+  const lp = pl<p || (pl===p && RIGHT[n.op]);
+  const rp = pr<p || (pr===p && !RIGHT[n.op]);
+  const L=toIn(n.l), R=toIn(n.r);
+  return (lp?'('+L+')':L)+' '+n.op+' '+(rp?'('+R+')':R);
+}
+
+const PARSERS={infix:t=>parseInfix(t),prefix:parsePrefix,postfix:parsePostfix};
+const WRITERS={infix:toIn,prefix:n=>toPre(n).join(' '),postfix:n=>toPost(n).join(' ')};
+
+let src='infix';
+const $=id=>document.getElementById(id);
+
+function render(){
+  const err=$('err'), box=$('results'); err.textContent=''; box.innerHTML='';
+  let ast;
+  try{ ast=PARSERS[src](tokenize($('inp').value)); }
+  catch(e){ err.textContent=e.message; return; }
+  Object.keys(NAMES).filter(f=>f!==src).forEach(f=>{
+    const text=WRITERS[f](ast);
+    const d=document.createElement('section'); d.className='res';
+    d.innerHTML='<h2></h2><div class="out"></div><div class="acts"><button data-a="copy">Copiar</button><button data-a="use">Usar como entrada</button></div>';
+    d.querySelector('h2').textContent=NAMES[f];
+    d.querySelector('.out').textContent=text;
+    d.querySelector('[data-a=copy]').onclick=async e=>{
+      try{await navigator.clipboard.writeText(text); e.target.textContent='Copiado';}
+      catch{ e.target.textContent='No se pudo copiar'; }
+      setTimeout(()=>e.target.textContent='Copiar',1400);
+    };
+    d.querySelector('[data-a=use]').onclick=()=>{ setSrc(f); $('inp').value=text; render(); save(); };
+    box.appendChild(d);
+  });
+}
+
+function setSrc(f){
+  src=f;
+  document.querySelectorAll('#seg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.f===f));
+  const c=$('chips'); c.innerHTML='';
+  EX[f].forEach(x=>{const b=document.createElement('button'); b.textContent=x; b.onclick=()=>{$('inp').value=x; render(); save();}; c.appendChild(b);});
+}
+
+function save(){ try{localStorage.setItem('np',JSON.stringify({src,v:$('inp').value}))}catch{} }
+function load(){ try{const s=JSON.parse(localStorage.getItem('np')||'null'); if(s&&NAMES[s.src]){src=s.src; $('inp').value=s.v}}catch{} }
+
+document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>{
+  setSrc(b.dataset.f);
+  $('inp').value=EX[b.dataset.f][0]; render(); save();
+});
+$('inp').addEventListener('input',()=>{render();save();});
+load(); setSrc(src); render();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
