@@ -1,5 +1,6 @@
 // Sube el número de versión cada vez que cambies algún archivo.
-const CACHE = 'notacion-polaca-v1';
+const VERSION = 'v1.1';
+const CACHE = 'notacion-polaca-' + VERSION;
 const ASSETS = [
   './',
   './index.html',
@@ -10,6 +11,14 @@ const ASSETS = [
   './icons/apple-touch-icon.png'
 ];
 
+// Envía la versión actual a todos los clientes controlados.
+function broadcastVersion() {
+  const msg = { type: 'VERSION', version: VERSION };
+  self.clients.matchAll({ includeUncontrolled: true }).then(clients =>
+    clients.forEach(c => c.postMessage(msg))
+  );
+}
+
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
@@ -19,7 +28,15 @@ self.addEventListener('activate', e => {
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
+      .then(broadcastVersion)
   );
+});
+
+// Responde a peticiones explícitas de versión desde la página.
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'GET_VERSION') {
+    e.source.postMessage({ type: 'VERSION', version: VERSION });
+  }
 });
 
 // Caché primero; si no está, red; sin red, devuelve la página principal.
