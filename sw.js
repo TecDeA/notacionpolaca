@@ -1,5 +1,5 @@
 // Sube el número de versión cada vez que cambies algún archivo.
-const VERSION = 'v1.1';
+const VERSION = 'v1.2';
 const CACHE = 'notacion-polaca-' + VERSION;
 const ASSETS = [
   './',
@@ -26,7 +26,9 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      // Filtrar por prefijo propio: caches.keys() es global al origen y
+      // sin este filtro se borraban las cachés del portal y demás apps.
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('notacion-polaca-') && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
       .then(broadcastVersion)
   );
